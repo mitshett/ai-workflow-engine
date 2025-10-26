@@ -6,3 +6,8 @@ This module provides Model Context Protocol (MCP) integration:
 - Connection pooling and health monitoring
 - MCP tool execution and result processing
 """
+
+from .client_manager import MCPClientManager
+from .http_client import HTTPMCPClient
+
+__all__ = ['MCPClientManager', 'HTTPMCPClient']

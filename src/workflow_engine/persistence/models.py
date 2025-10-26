@@ -126,7 +126,7 @@ class NodeExecution(Base):
             name="node_executions_status_valid"
         ),
         CheckConstraint(
-            "node_type IN ('agent', 'tool', 'mcp_server', 'condition')",
+            "node_type IN ('start', 'end', 'agent', 'tool', 'mcp_server', 'condition')",
             name="node_executions_node_type_valid"
         ),
         CheckConstraint("retry_count >= 0", name="node_executions_retry_count_valid"),
