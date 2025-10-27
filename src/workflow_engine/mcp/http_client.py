@@ -4,11 +4,10 @@ Provides HTTP-based Model Context Protocol client for connecting to MCP servers
 over HTTP/HTTPS with JSON-RPC 2.0 protocol support.
 """
 
-import asyncio
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
+from datetime import timezone
 
 import aiohttp
 from ..core.schemas import MCPServerConfig

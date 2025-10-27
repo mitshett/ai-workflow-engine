@@ -320,7 +320,6 @@ def _convert_parser_result_to_api_response(
 
 # Example usage for testing
 if __name__ == "__main__":
-    import asyncio
     from fastapi.testclient import TestClient
     from fastapi import FastAPI
 

@@ -15,10 +15,9 @@ Author: AI Workflow Engine Team
 import re
 import json
 import time
-import structlog
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional
 from enum import Enum
 
 from ..core.node_executor import (
@@ -33,7 +32,8 @@ from ..core.context import ExecutionContext
 from ..core.schemas import WorkflowNode
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class ConditionType(str, Enum):
@@ -134,7 +134,7 @@ class StringMatchEvaluator(BaseConditionEvaluator):
             )
             
         except Exception as e:
-            logger.error("String match evaluation failed", error=str(e))
+            logger.error(f"String match evaluation failed - error: {str(e)}")
             return ConditionEvaluationResult(
                 matched=False,
                 evaluation_details={"error": str(e)},
@@ -211,14 +211,14 @@ class RegexMatchEvaluator(BaseConditionEvaluator):
             )
             
         except re.error as e:
-            logger.error("Regex compilation failed", pattern=pattern, error=str(e))
+            logger.error(f"Regex compilation failed - pattern: {pattern}, error: {str(e)}")
             return ConditionEvaluationResult(
                 matched=False,
                 evaluation_details={"regex_error": str(e)},
                 evaluation_time_ms=(time.time() - start_time) * 1000
             )
         except Exception as e:
-            logger.error("Regex evaluation failed", error=str(e))
+            logger.error(f"Regex evaluation failed - error: {str(e)}")
             return ConditionEvaluationResult(
                 matched=False,
                 evaluation_details={"error": str(e)},
@@ -305,7 +305,7 @@ class NumericComparisonEvaluator(BaseConditionEvaluator):
             )
             
         except Exception as e:
-            logger.error("Numeric comparison evaluation failed", error=str(e))
+            logger.error(f"Numeric comparison evaluation failed - error: {str(e)}")
             return ConditionEvaluationResult(
                 matched=False,
                 evaluation_details={"error": str(e)},
@@ -395,7 +395,7 @@ class JSONPathEvaluator(BaseConditionEvaluator):
             )
             
         except Exception as e:
-            logger.error("JSON path evaluation failed", error=str(e))
+            logger.error(f"JSON path evaluation failed - error: {str(e)}")
             return ConditionEvaluationResult(
                 matched=False,
                 evaluation_details={"error": str(e)},
@@ -545,7 +545,7 @@ class ConditionExecutor(NodeExecutor):
             # Use default target if no conditions matched
             if not matched_target:
                 matched_target = default_target
-                logger.info("No conditions matched, using default target", target=matched_target)
+                logger.info(f"No conditions matched, using default target - target: {matched_target}")
             
             if not matched_target:
                 raise ValueError("No matching condition found and no default target specified")
@@ -690,7 +690,7 @@ class ConditionExecutor(NodeExecutor):
     ) -> None:
         """Register a custom condition evaluator for extensibility."""
         self._evaluators[ConditionType.CUSTOM] = evaluator
-        logger.info("Registered custom condition evaluator", condition_type=condition_type)
+        logger.info(f"Registered custom condition evaluator - condition_type: {condition_type}")
 
     def get_evaluation_statistics(self) -> Dict[str, Any]:
         """Get evaluation performance statistics."""
@@ -705,7 +705,7 @@ async def test_condition_executor():
 
     # Create mock context
     mock_session = AsyncMock()
-    context = ExecutionContext("test_run", mock_session)
+    context = ExecutionContext("test_run")
 
     # Set up test data
     await context.set("nodes.classifier.output.response", "ITINERARY")

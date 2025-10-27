@@ -1,0 +1,98 @@
+[
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "KillBash",
+    "tool_input": {
+      "shell_id": "bash_8"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "cd /Users/mitshett/Documents/Projects/AI\\ Workflow/ai-workflow-engine && source venv/bin/activate && python -m uvicorn src.workflow_engine.app.main:app --host 127.0.0.1 --port 8000 --reload",
+      "description": "Restart microservice on port 8000",
+      "run_in_background": true
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "BashOutput",
+    "tool_input": {
+      "bash_id": "bash_9"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -X GET \"http://127.0.0.1:8000/health\" --connect-timeout 5",
+      "description": "Test health endpoint after restart"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "BashOutput",
+    "tool_input": {
+      "bash_id": "bash_9"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -X POST \"http://127.0.0.1:8000/api/v1/workflows/execute\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"X-Correlation-ID: test-execution-$(date +%s)\" \\\n  -d @/Users/mitshett/Documents/Projects/AI\\ Workflow/ai-workflow-engine/good_payload.json \\\n  --connect-timeout 10 \\\n  --max-time 120",
+      "description": "Test workflow execution API after restart"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -X POST \"http://127.0.0.1:8000/api/v1/workflows/execute\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"X-Correlation-ID: test-execution-$(date +%s)\" \\\n  -d @\"/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine/good_payload.json\" \\\n  --connect-timeout 10 \\\n  --max-time 120",
+      "description": "Test workflow execution API with properly quoted file path"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -X POST \"http://127.0.0.1:8000/api/v1/workflows/execute\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"X-Correlation-ID: test-execution-$(date +%s)\" \\\n  -d '{\n    \"definition\": {\n        \"id\": \"preview_workflow\",\n        \"name\": \"Canvas Workflow\",\n        \"description\": \"Workflow generated from visual canvas designer\",\n        \"nodes\": [\n            {\n                \"id\": \"node_2g8p91ofc\",\n                \"type\": \"start\",\n                \"name\": \"Start\",\n                \"alias\": \"start\",\n                \"config\": {\n                    \"name\": \"Start\",\n                    \"description\": \"Start workflow execution\"\n                },\n                \"next\": [\n                    \"node_qhayi7wlf\"\n                ],\n                \"dependencies\": []\n            },\n            {\n                \"id\": \"node_qhayi7wlf\",\n                \"type\": \"agent\",\n                \"name\": \"Agent\",\n                \"alias\": \"agent\",\n                \"config\": {\n                    \"provider\": \"azure_openai\",\n                    \"model\": \"gpt-35-turbo\",\n                    \"prompt\": \"You are a helpful assistant. User request: ${workflow.input.user_request}. provide weather details for the user request\",\n                    \"temperature\": 0.7,\n                    \"max_tokens\": 500,\n                    \"timeout\": 60\n                },\n                \"next\": [\n                    \"node_yd9t0xmbw\"\n                ],\n                \"dependencies\": [\n                    \"node_2g8p91ofc\"\n                ]\n            },\n            {\n                \"id\": \"node_yd9t0xmbw\",\n                \"type\": \"end\",\n                \"name\": \"End\",\n                \"alias\": \"end\",\n                \"config\": {\n                    \"name\": \"End\",\n                    \"description\": \"End workflow execution\",\n                    \"collect_outputs\": true\n                },\n                \"next\": [],\n                \"dependencies\": [\n                    \"node_qhayi7wlf\"\n                ]\n            }\n        ]\n    },\n    \"input_data\": {\n        \"user_request\": \"provide me weather for bangalore\"\n    }\n}' \\\n  --connect-timeout 10 \\\n  --max-time 120",
+      "description": "Test workflow execution with inline JSON payload"
+    }
+  },
+  {
+    "session_id": "944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1",
+    "transcript_path": "/Users/mitshett/.claude/projects/-Users-mitshett-Documents-Projects-AI-Workflow-ai-workflow-engine/944e57f3-bfa2-43e2-b3d4-ea4a5796e0a1.jsonl",
+    "cwd": "/Users/mitshett/Documents/Projects/AI Workflow/ai-workflow-engine",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "BashOutput",
+    "tool_input": {
+      "bash_id": "bash_9"
+    }
+  }
+]

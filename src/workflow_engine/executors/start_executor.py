@@ -7,7 +7,6 @@ entry points for workflows in enterprise workflow management systems.
 Author: AI Workflow Engine Team
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -22,7 +21,8 @@ from ..core.context import ExecutionContext
 from ..core.schemas import WorkflowNode
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class StartExecutor(NodeExecutor):
@@ -183,7 +183,7 @@ async def test_start_executor():
 
     # Create mock context
     mock_session = AsyncMock()
-    context = ExecutionContext("test_run", mock_session)
+    context = ExecutionContext("test_run")
 
     # Set up test workflow data
     await context.set("workflow.id", "test_workflow")

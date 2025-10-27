@@ -13,7 +13,6 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
-import structlog
 
 from ..core.node_executor import (
     NodeExecutor,
@@ -29,7 +28,8 @@ from ..core.schemas import WorkflowNode, MCPToolNodeConfig, MCPServerConfig
 from ..mcp.client_manager import MCPClientManager, MCPError
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class MCPToolExecutor(NodeExecutor):
@@ -467,7 +467,7 @@ async def test_mcp_executor():
     
     # Create mock context
     mock_session = AsyncMock()
-    context = ExecutionContext("test_run", mock_session)
+    context = ExecutionContext("test_run")
     
     # Set up test data
     await context.set("input.product_id", "WS-C3850-24T-E")

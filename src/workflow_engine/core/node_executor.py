@@ -17,16 +17,16 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Callable, Awaitable
-import structlog
+from typing import Any, Dict, List, Optional, Callable
 
 from .context import ExecutionContext
 from ..core.schemas import WorkflowNode
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class ExecutionStatus(Enum):
@@ -355,7 +355,7 @@ class NodeExecutor(ABC):
             default_timeout: Default timeout in seconds for node execution
         """
         self.default_timeout = default_timeout
-        self.logger = structlog.get_logger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
 
     @abstractmethod
     async def execute_impl(
@@ -445,7 +445,7 @@ class NodeExecutor(ABC):
             metrics=ExecutionMetrics(start_time=start_time)
         )
 
-        await self.logger.ainfo(
+        self.logger.info(
             "Starting node execution",
             node_id=node.id,
             node_type=node.type,
@@ -475,7 +475,7 @@ class NodeExecutor(ABC):
                     result.retry_count = attempt - 1
                     result.status = ExecutionStatus.RUNNING
 
-                    await self.logger.adebug(
+                    self.logger.debug(
                         "Executing node attempt",
                         node_id=node.id,
                         attempt=attempt,
@@ -502,7 +502,7 @@ class NodeExecutor(ABC):
                     if execution_result.context_updates:
                         await context.merge(execution_result.context_updates)
 
-                    await self.logger.ainfo(
+                    self.logger.info(
                         "Node execution completed",
                         node_id=node.id,
                         status=execution_result.status.value,
@@ -516,7 +516,7 @@ class NodeExecutor(ABC):
                 except asyncio.TimeoutError:
                     result.set_timeout(timeout_seconds)
 
-                    await self.logger.awarning(
+                    self.logger.warning(
                         "Node execution timeout",
                         node_id=node.id,
                         timeout_seconds=timeout_seconds,
@@ -536,7 +536,7 @@ class NodeExecutor(ABC):
                     return result
 
                 except Exception as e:
-                    await self.logger.aerror(
+                    self.logger.error(
                         "Node execution error",
                         node_id=node.id,
                         error=str(e),
@@ -552,7 +552,7 @@ class NodeExecutor(ABC):
                         result.status = ExecutionStatus.RETRYING
                         delay = retry_policy.get_delay(attempt)
 
-                        await self.logger.ainfo(
+                        self.logger.info(
                             "Retrying node execution",
                             node_id=node.id,
                             attempt=attempt + 1,
@@ -587,7 +587,7 @@ class NodeExecutor(ABC):
 
         except Exception as e:
             # Catch-all for unexpected errors
-            await self.logger.aerror(
+            self.logger.error(
                 "Unexpected error in node execution",
                 node_id=node.id,
                 error=str(e),
@@ -665,7 +665,7 @@ class ExecutorRegistry:
 
     def __init__(self):
         self._executors: Dict[str, NodeExecutor] = {}
-        self.logger = structlog.get_logger("ExecutorRegistry")
+        self.logger = get_logger("ExecutorRegistry")
 
     def register(self, node_type: str, executor: NodeExecutor) -> None:
         """

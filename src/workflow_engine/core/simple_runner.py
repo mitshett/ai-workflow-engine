@@ -11,7 +11,6 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
-import structlog
 
 from .context import ExecutionContext
 from .node_executor import ExecutorRegistry, ExecutionStatus
@@ -22,10 +21,11 @@ from ..executors.agent_executor import AgentExecutor
 from ..executors.condition_executor import ConditionExecutor
 from ..executors.mcp_executor import MCPToolExecutor
 from ..mcp.client_manager import MCPClientManager
-from ..persistence.database import DatabaseManager
+# No database persistence needed
 
-# Set up structured logging
-logger = structlog.get_logger(__name__)
+# Set up logging
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class WorkflowExecutionResult:
@@ -89,7 +89,7 @@ class SimpleWorkflowRunner:
     sequential workflow execution patterns.
     """
 
-    def __init__(self, db_manager: Optional[DatabaseManager] = None, mcp_client_manager: Optional[MCPClientManager] = None):
+    def __init__(self,  mcp_client_manager: Optional[MCPClientManager] = None):
         """
         Initialize the workflow runner.
 
@@ -97,7 +97,6 @@ class SimpleWorkflowRunner:
             db_manager: Optional database manager for persistence
             mcp_client_manager: Optional MCP client manager for MCP tool nodes
         """
-        self.db_manager = db_manager
         self.mcp_client_manager = mcp_client_manager or MCPClientManager()
         self._setup_executors()
 
@@ -112,7 +111,7 @@ class SimpleWorkflowRunner:
         self.registry.register("condition", ConditionExecutor())
         self.registry.register("mcp_tool", MCPToolExecutor(self.mcp_client_manager))
 
-        logger.info("Workflow runner initialized", executors=self.registry.list_executors())
+        logger.info(f"Workflow runner initialized - executors: {self.registry.list_executors()}")
 
     async def run_workflow(
         self,
@@ -151,7 +150,7 @@ class SimpleWorkflowRunner:
 
             if not parse_result.is_valid:
                 error_msg = f"Workflow validation failed: {'; '.join([e.message for e in parse_result.validation_result.errors])}"
-                logger.error("Workflow validation failed", run_id=run_id, errors=[e.message for e in parse_result.validation_result.errors])
+                logger.error(f"Workflow validation failed - run_id: {run_id}, errors: {[e.message for e in parse_result.validation_result.errors]}")
 
                 return WorkflowExecutionResult(
                     run_id=run_id,
@@ -164,7 +163,7 @@ class SimpleWorkflowRunner:
                 )
 
             workflow = parse_result.workflow
-            logger.info("Workflow validation successful", run_id=run_id, node_count=len(workflow.nodes))
+            logger.info(f"Workflow validation successful - run_id: {run_id}, node_count: {len(workflow.nodes)}")
 
             # 2. Create execution context
             if self.db_manager:
@@ -179,15 +178,15 @@ class SimpleWorkflowRunner:
                 if hasattr(node, 'alias') and getattr(node, 'alias'):
                     alias_to_node_mapping[node.alias] = node.id
 
-            context = ExecutionContext(run_id, session, alias_to_node_mapping=alias_to_node_mapping)
-            logger.debug("Context initialized with aliases", run_id=run_id, aliases=list(alias_to_node_mapping.keys()))
+            context = ExecutionContext(run_id, alias_to_node_mapping=alias_to_node_mapping)
+            logger.debug(f"Context initialized with aliases - run_id: {run_id}, aliases: {list(alias_to_node_mapping.keys())}")
 
             # 3. Initialize context with input data
             await context.set("workflow.input", input_data)
             await context.set("workflow.id", workflow_id)
             await context.set("workflow.started_at", start_time.isoformat())
 
-            logger.debug("Context initialized", run_id=run_id, input_data=input_data)
+            logger.debug(f"Context initialized - run_id: {run_id}, input_data: {input_data}")
 
             # 4. Execute workflow nodes in sequence
             node_results = {}
@@ -209,7 +208,7 @@ class SimpleWorkflowRunner:
                 if not current_node:
                     raise ValueError(f"Node '{current_node_id}' not found in workflow definition")
 
-                logger.info("Executing node", run_id=run_id, node_id=current_node_id, node_type=current_node.type)
+                logger.info(f"Executing node - run_id: {run_id}, node_id: {current_node_id}, node_type: {current_node.type}")
 
                 # Execute the node
                 result = await self.registry.execute_node(current_node, context)
@@ -226,7 +225,7 @@ class SimpleWorkflowRunner:
                 # Check execution result
                 if result.status != ExecutionStatus.SUCCESS:
                     error_msg = f"Node '{current_node_id}' failed: {result.error.get('message', 'Unknown error') if result.error else 'Unknown error'}"
-                    logger.error("Node execution failed", run_id=run_id, node_id=current_node_id, error=error_msg)
+                    logger.error(f"Node execution failed - run_id: {run_id}, node_id: {current_node_id}, error: {error_msg}")
 
                     return WorkflowExecutionResult(
                         run_id=run_id,
@@ -240,20 +239,20 @@ class SimpleWorkflowRunner:
                     )
 
                 executed_nodes.add(current_node_id)
-                logger.info("Node execution completed", run_id=run_id, node_id=current_node_id, status=result.status.value)
+                logger.info(f"Node execution completed - run_id: {run_id}, node_id: {current_node_id}, status: {result.status.value}")
 
                 # Determine next node - use result.next_nodes for conditional routing
                 if result.next_nodes:
                     # Use next_nodes from execution result (for conditional routing)
                     current_node_id = result.next_nodes[0]  # Take first next node from result
-                    logger.info("Using conditional routing", run_id=run_id, next_node=current_node_id, available_routes=result.next_nodes)
+                    logger.info(f"Using conditional routing - run_id: {run_id}, next_node: {current_node_id}, available_routes: {result.next_nodes}")
                 elif current_node.next:
                     # Fallback to node.next for normal sequential execution
                     current_node_id = current_node.next[0]  # Take first next node
-                    logger.info("Using sequential routing", run_id=run_id, next_node=current_node_id)
+                    logger.info(f"Using sequential routing - run_id: {run_id}, next_node: {current_node_id}")
                 else:
                     current_node_id = None  # End of workflow
-                    logger.info("Workflow complete - no more nodes", run_id=run_id)
+                    logger.info(f"Workflow complete - no more nodes - run_id: {run_id}")
 
             # 5. Collect final output
             final_output = {}
@@ -293,7 +292,7 @@ class SimpleWorkflowRunner:
 
         except Exception as e:
             error_msg = f"Workflow execution failed: {str(e)}"
-            logger.error("Workflow execution failed", run_id=run_id, error=str(e), error_type=type(e).__name__)
+            logger.error(f"Workflow execution failed - run_id: {run_id}, error: {str(e)}, error_type: {type(e).__name__}")
 
             return WorkflowExecutionResult(
                 run_id=run_id,
@@ -325,7 +324,7 @@ class SimpleWorkflowRunner:
             logger.warning("No start node found - all nodes are referenced")
             return None
         else:
-            logger.warning("Multiple start nodes found", start_nodes=start_nodes)
+            logger.warning(f"Multiple start nodes found - start_nodes: {start_nodes}")
             return start_nodes[0]  # Return first one
 
     async def validate_workflow(self, workflow_definition: Dict[str, Any]) -> Dict[str, Any]:

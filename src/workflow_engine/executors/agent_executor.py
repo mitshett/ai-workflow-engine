@@ -13,9 +13,8 @@ import json
 import os
 import time
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import requests
-import structlog
 
 from ..core.node_executor import (
     NodeExecutor,
@@ -30,14 +29,14 @@ from ..core.context import ExecutionContext
 from ..core.schemas import WorkflowNode
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 # Check for optional LangChain dependencies
 try:
     from langchain_openai import AzureChatOpenAI
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_core.output_parsers import JsonOutputParser
-    from langchain_core.prompts import ChatPromptTemplate
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
@@ -45,7 +44,7 @@ except ImportError:
 
 # Check for OpenAI direct client
 try:
-    from openai import AsyncOpenAI, AsyncAzureOpenAI
+    from openai import AsyncAzureOpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -108,7 +107,7 @@ class AzureOpenAITokenManager:
             response.raise_for_status()
 
         except requests.exceptions.RequestException as e:
-            logger.error("Failed to retrieve Azure OpenAI token", error=str(e))
+            logger.error(f"Failed to retrieve Azure OpenAI token - error: {str(e)}")
             raise RuntimeError(f"Failed to retrieve Azure OpenAI token: {str(e)}")
 
         # Parse the token from the response
@@ -124,7 +123,7 @@ class AzureOpenAITokenManager:
         self._cached_token = token
         self._token_expires_at = current_time + expires_in
 
-        logger.info("Successfully retrieved Azure OpenAI token", expires_in=expires_in)
+        logger.info(f"Successfully retrieved Azure OpenAI token - expires_in: {expires_in}")
         return token
 
 
@@ -505,7 +504,7 @@ class AgentExecutor(NodeExecutor):
                     retry_count += 1
                     continue
                 else:
-                    logger.error("LangChain execution failed", error=str(e), retry_count=retry_count)
+                    logger.error(f"LangChain execution failed - error: {str(e)}, retry_count: {retry_count}")
                     raise RuntimeError(f"LangChain Azure OpenAI call failed: {str(e)}")
 
         raise RuntimeError("Maximum authentication retries exceeded")
@@ -564,7 +563,7 @@ class AgentExecutor(NodeExecutor):
                 raise RuntimeError("No response content received from Azure OpenAI")
 
         except Exception as e:
-            logger.error("Direct OpenAI client execution failed", error=str(e))
+            logger.error(f"Direct OpenAI client execution failed - error: {str(e)}")
             raise RuntimeError(f"Azure OpenAI API call failed: {str(e)}")
 
     async def _get_langchain_client(self, model: str, config: Dict[str, Any]) -> Any:
@@ -603,7 +602,7 @@ class AgentExecutor(NodeExecutor):
         # Cache the client
         self._langchain_clients[cache_key] = client
 
-        logger.info("Created LangChain Azure OpenAI client", model=model, cache_key=cache_key)
+        logger.info(f"Created LangChain Azure OpenAI client - model: {model}, cache_key: {cache_key}")
         return client
 
     async def _get_openai_client(self, config: Dict[str, Any]) -> Any:
@@ -634,7 +633,7 @@ class AgentExecutor(NodeExecutor):
         # Cache the client
         self._openai_clients[cache_key] = client
 
-        logger.info("Created direct Azure OpenAI client", cache_key=cache_key)
+        logger.info(f"Created direct Azure OpenAI client - cache_key: {cache_key}")
         return client
 
     def validate_config(self, config: Dict[str, Any]) -> ValidationResult:
@@ -810,7 +809,7 @@ async def test_agent_executor():
 
     # Create mock context
     mock_session = AsyncMock()
-    context = ExecutionContext("test_run", mock_session)
+    context = ExecutionContext("test_run")
 
     # Set up test data
     await context.set("workflow.input.user_name", "Alice")

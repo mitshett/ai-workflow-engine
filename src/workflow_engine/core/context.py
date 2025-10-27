@@ -16,25 +16,19 @@ Author: AI Workflow Engine Team
 """
 
 import asyncio
-import json
 import time
 import hashlib
-import logging
-from typing import Dict, Any, Optional, List, Union, Set
+from typing import Dict, Any, Optional, List, Set
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
-import structlog
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert
-from pydantic import BaseModel, Field
-
-from ..persistence.models import WorkflowRun
+# Database removed - no persistence needed
+from pydantic import Field
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -166,13 +160,12 @@ class ExecutionContext:
     def __init__(
         self,
         run_id: str,
-        db_session: AsyncSession,
         cache_ttl_seconds: int = 300,
         memory_limit_mb: int = 100,
         alias_to_node_mapping: Optional[Dict[str, str]] = None
     ):
         self.run_id = run_id
-        self._session = db_session
+        self._session = None  # No database persistence needed
         self.cache_ttl_seconds = cache_ttl_seconds
         self.memory_limit_mb = memory_limit_mb
         self._alias_to_node_mapping = alias_to_node_mapping or {}
@@ -194,7 +187,7 @@ class ExecutionContext:
         # Template resolution cache
         self._template_cache: Dict[str, str] = {}
 
-        logger.info("ExecutionContext initialized", run_id=run_id, aliases=list(self._alias_to_node_mapping.keys()))
+        logger.info(f"ExecutionContext initialized - run_id: {run_id}, aliases: {list(self._alias_to_node_mapping.keys())}")
 
     @asynccontextmanager
     async def _read_lock(self):
@@ -242,7 +235,7 @@ class ExecutionContext:
             execution_time = (time.time() - start_time) * 1000
             self._update_read_metrics(execution_time)
 
-            await logger.adebug(
+            logger.debug(
                 "Context read operation",
                 run_id=self.run_id,
                 key=key,
@@ -284,7 +277,7 @@ class ExecutionContext:
             execution_time = (time.time() - start_time) * 1000
             self._update_write_metrics(execution_time)
 
-            await logger.adebug(
+            logger.debug(
                 "Context write operation",
                 run_id=self.run_id,
                 key=key,
@@ -326,7 +319,7 @@ class ExecutionContext:
             execution_time = (time.time() - start_time) * 1000
             self._update_write_metrics(execution_time)
 
-            await logger.adebug(
+            logger.debug(
                 "Context merge operation",
                 run_id=self.run_id,
                 keys_merged=len(updates),
@@ -354,7 +347,7 @@ class ExecutionContext:
                 # Remove from cache tracking
                 self._cache_expiry.pop(key, None)
 
-                await logger.adebug(
+                logger.debug(
                     "Context delete operation",
                     run_id=self.run_id,
                     key=key,
@@ -469,7 +462,7 @@ class ExecutionContext:
 
                 if result.rowcount == 0:
                     # Version conflict - need to reload and merge
-                    await logger.awarning(
+                    logger.warning(
                         "Context persistence conflict",
                         run_id=self.run_id,
                         expected_version=self._last_persisted_version,
@@ -483,7 +476,7 @@ class ExecutionContext:
                 self._last_persisted_version = self._version
                 self._dirty_keys.clear()
 
-                await logger.ainfo(
+                logger.info(
                     "Context persisted successfully",
                     run_id=self.run_id,
                     version=self._version,
@@ -494,7 +487,7 @@ class ExecutionContext:
 
         except Exception as e:
             await self._session.rollback()
-            await logger.aerror(
+            logger.error(
                 "Context persistence failed",
                 run_id=self.run_id,
                 error=str(e),
@@ -515,7 +508,7 @@ class ExecutionContext:
             workflow_run = result.scalar_one_or_none()
 
             if not workflow_run:
-                await logger.awarning(
+                logger.warning(
                     "Workflow run not found for context load",
                     run_id=self.run_id
                 )
@@ -531,7 +524,7 @@ class ExecutionContext:
                 self._last_persisted_version = self._version
                 self._dirty_keys.clear()
 
-                await logger.ainfo(
+                logger.info(
                     "Context loaded from database",
                     run_id=self.run_id,
                     version=self._version,
@@ -541,7 +534,7 @@ class ExecutionContext:
                 return True
 
         except Exception as e:
-            await logger.aerror(
+            logger.error(
                 "Context load failed",
                 run_id=self.run_id,
                 error=str(e)
@@ -576,7 +569,7 @@ class ExecutionContext:
                 for key in expired_keys:
                     await self._evict_key(key)
 
-                await logger.ainfo(
+                logger.info(
                     "Expired context keys cleaned up",
                     run_id=self.run_id,
                     keys_cleaned=len(expired_keys)
@@ -596,7 +589,7 @@ class ExecutionContext:
         current_size_mb = sys.getsizeof(self._namespace.to_dict()) / (1024 * 1024)
 
         if current_size_mb > self.memory_limit_mb:
-            await logger.awarning(
+            logger.warning(
                 "Context memory limit exceeded",
                 run_id=self.run_id,
                 current_mb=current_size_mb,
@@ -644,12 +637,8 @@ class ContextManager:
     async def get_context(self, run_id: str, alias_to_node_mapping: Optional[Dict[str, str]] = None) -> ExecutionContext:
         """Get or create execution context for run"""
         if run_id not in self._contexts:
-            session = self._session_factory()
-            context = ExecutionContext(run_id, session, alias_to_node_mapping=alias_to_node_mapping)
-
-            # Try to load existing context from database
-            await context.load_from_database()
-
+            # No database persistence - create in-memory context
+            context = ExecutionContext(run_id, alias_to_node_mapping=alias_to_node_mapping)
             self._contexts[run_id] = context
 
         return self._contexts[run_id]
@@ -666,7 +655,7 @@ class ContextManager:
 
         del self._contexts[run_id]
 
-        await logger.ainfo(
+        logger.info(
             "Context removed from memory",
             run_id=run_id,
             persisted=persist
@@ -686,7 +675,7 @@ class ContextManager:
 
         self._last_cleanup = datetime.utcnow()
 
-        await logger.ainfo(
+        logger.info(
             "Context cleanup completed",
             contexts_active=len(self._contexts),
             keys_cleaned=cleaned_keys

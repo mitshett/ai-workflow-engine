@@ -7,7 +7,6 @@ termination points for workflows in enterprise workflow management systems.
 Author: AI Workflow Engine Team
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -22,7 +21,8 @@ from ..core.context import ExecutionContext
 from ..core.schemas import WorkflowNode
 
 # Set up structured logging
-logger = structlog.get_logger(__name__)
+from ..shared.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class EndExecutor(NodeExecutor):
@@ -90,7 +90,7 @@ class EndExecutor(NodeExecutor):
                     end_dt = start_time
                     workflow_duration_seconds = (end_dt - start_dt).total_seconds()
                 except Exception as e:
-                    logger.warning("Could not calculate workflow duration", error=str(e))
+                    logger.warning(f"Could not calculate workflow duration - error: {str(e)}")
 
             # Record end node metadata
             end_metadata = {
@@ -234,7 +234,7 @@ async def test_end_executor():
 
     # Create mock context
     mock_session = AsyncMock()
-    context = ExecutionContext("test_run", mock_session)
+    context = ExecutionContext("test_run")
 
     # Set up test workflow data with some sample outputs
     await context.set("workflow.id", "test_workflow")
