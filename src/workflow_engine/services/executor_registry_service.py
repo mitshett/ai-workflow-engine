@@ -228,6 +228,36 @@ class NodeExecutorRegistryService:
             # Execute using core executor
             core_result = await executor.execute(core_node, core_context)
             
+            # Apply context updates back to domain context for next nodes
+            if hasattr(core_result, 'context_updates') and core_result.context_updates:
+                self.logger.info(
+                    "Processing context updates",
+                    node_id=node.id,
+                    total_updates=len(core_result.context_updates),
+                    update_keys=list(core_result.context_updates.keys())
+                )
+                
+                for key, value in core_result.context_updates.items():
+                    # Store all context updates including complex types (dict, list)
+                    # so downstream nodes can access MCP/tool outputs via template resolution.
+                    # Skip only .full metadata keys to reduce context size.
+                    if not key.endswith('.full'):
+                        context.set_variable(key, value)
+                        self.logger.info(
+                            "Applied context update",
+                            node_id=node.id,
+                            key=key,
+                            value_type=type(value).__name__,
+                            value_preview=str(value)[:200] if value is not None else None
+                        )
+                    else:
+                        self.logger.debug(
+                            "Skipped .full metadata context update",
+                            node_id=node.id,
+                            key=key,
+                            value_type=type(value).__name__
+                        )
+            
             # Convert core ExecutionResult to domain NodeResult
             domain_result = self._convert_core_result_to_domain(
                 core_result, 
@@ -316,14 +346,24 @@ class NodeExecutorRegistryService:
         # Create core context - this is a simplified implementation
         # In a full implementation, this would properly map all context data
         core_context = CoreExecutionContext(
-            run_id=domain_context.run_id
+            run_id=domain_context.run_id,
+            alias_to_node_mapping=domain_context.alias_to_node_mapping
         )
         
         # Copy over workflow and input data
-        # Set workflow input data synchronously for now
+        # CRITICAL FIX: Set workflow input data properly in core context namespace
         if hasattr(domain_context, 'input_data') and domain_context.input_data:
-            # Directly set the data in the core context's namespace
+            # Set the entire input_data object
             core_context._namespace.set("workflow.input", domain_context.input_data)
+            
+            # ALSO set individual fields for ${workflow.input.X} template resolution
+            for key, value in domain_context.input_data.items():
+                core_context._namespace.set(f"workflow.input.{key}", value)
+        
+        # Copy all domain context variables to core context
+        if hasattr(domain_context, 'variables') and domain_context.variables:
+            for key, value in domain_context.variables.items():
+                core_context._namespace.set(key, value)
         
         return core_context
     

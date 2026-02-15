@@ -74,7 +74,7 @@ class WorkflowExecutionRequest(BaseModel):
                     "type": "agent",
                     "config": {
                         "provider": "azure_openai",
-                        "model": "gpt-35-turbo",
+                        "model": "gpt-4o-mini",
                         "prompt": "Provide weather info for Bengaluru, India"
                     },
                     "next": ["workflow_end"]

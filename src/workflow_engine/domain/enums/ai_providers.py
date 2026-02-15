@@ -48,6 +48,11 @@ class AIProviderType(str, Enum):
         """Get list of default models for this provider."""
         model_mappings = {
             AIProviderType.OPENAI: [
+                "o4-mini",
+                "o3",
+                "o3-mini",
+                "gpt-4.1",
+                "gpt-4.1-mini",
                 "gpt-4o",
                 "gpt-4o-mini",
                 "gpt-4-turbo",
@@ -59,11 +64,17 @@ class AIProviderType(str, Enum):
                 "claude-3-opus-20240229"
             ],
             AIProviderType.AZURE_OPENAI: [
+                "o4-mini",
+                "o3",
+                "o3-mini",
+                "gpt-4.1",
+                "gpt-4.1-mini",
                 "gpt-4o",
                 "gpt-4",
                 "gpt-35-turbo"
             ],
             AIProviderType.AZURE: [
+                "o4-mini",
                 "gpt-4",
                 "gpt-35-turbo"
             ]

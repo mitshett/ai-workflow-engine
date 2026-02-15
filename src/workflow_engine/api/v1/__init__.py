@@ -8,7 +8,9 @@ Author: AI Workflow Engine Team
 """
 
 from .execution import router as execution_router
+from .mcp import router as mcp_router
 
 __all__ = [
     "execution_router",
+    "mcp_router",
 ]

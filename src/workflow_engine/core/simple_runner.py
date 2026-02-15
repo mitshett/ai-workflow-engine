@@ -364,11 +364,10 @@ async def run_simple_agent_workflow():
                 "type": "agent",
                 "config": {
                     "provider": "azure_openai",
-                    "model": "gpt-35-turbo",
+                    "model": "gpt-4o-mini",
                     "prompt": "Say hello to ${workflow.input.user_name} and write a short ${workflow.input.content_type}",
                     "system_prompt": "You are a friendly AI assistant.",
-                    "temperature": 0.7,
-                    "max_tokens": 200
+                    "temperature": 0.7
                 },
                 "next": []
             }
@@ -426,11 +425,10 @@ async def run_multi_agent_workflow():
                 "type": "agent",
                 "config": {
                     "provider": "azure_openai",
-                    "model": "gpt-35-turbo",
+                    "model": "gpt-4o-mini",
                     "prompt": "Analyze this request: ${workflow.input.request}. Provide key points.",
                     "system_prompt": "You are an analytical AI assistant.",
-                    "temperature": 0.3,
-                    "max_tokens": 300
+                    "temperature": 0.3
                 },
                 "next": ["summary_agent"]
             },
@@ -439,11 +437,10 @@ async def run_multi_agent_workflow():
                 "type": "agent",
                 "config": {
                     "provider": "azure_openai",
-                    "model": "gpt-35-turbo",
+                    "model": "gpt-4o-mini",
                     "prompt": "Based on this analysis: ${nodes.start_agent.output}, create a concise summary for ${workflow.input.audience}.",
                     "system_prompt": "You are a summarization expert.",
-                    "temperature": 0.5,
-                    "max_tokens": 200
+                    "temperature": 0.5
                 },
                 "next": []
             }

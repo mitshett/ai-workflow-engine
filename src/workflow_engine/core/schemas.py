@@ -2,11 +2,13 @@
 
 Comprehensive schema definitions for workflow validation with support for:
 - Multi-provider AI agents (OpenAI, Anthropic, Azure)
+- Smart MCP tools with LLM-based tool discovery
 - Tools and MCP server integrations
 - Conditional branching and triggers
 - DAG validation and dependency management
 """
 
+import os
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
@@ -42,56 +44,92 @@ class TriggerRule(str, Enum):
 
 
 # ============================================================================
+# LLM CONFIGURATION SCHEMAS
+# ============================================================================
+
+class LLMConfig(BaseModel):
+    """Unified LLM configuration with automatic environment variable loading."""
+    
+    # Core settings (configurable)
+    provider: Literal["azure_openai", "openai", "anthropic", "ollama"] = "azure_openai"
+    model: str = "gpt-4o-mini"
+    temperature: float = Field(0.1, ge=0.0, le=2.0, description="LLM temperature")
+    max_tokens: Optional[int] = Field(None, ge=100, le=32000, description="Maximum tokens (None = model default)")
+    
+    # Azure OpenAI configuration (configurable)
+    endpoint: Optional[str] = Field(None, description="Azure OpenAI endpoint URL (auto-loaded from LLM_ENDPOINT)")
+    api_version: str = Field("2024-08-01-preview", description="Azure API version")
+    deployment: Optional[str] = Field(None, description="Azure deployment name (auto-loaded from model name)")
+    
+    # Authentication (auto-populated from environment)
+    client_id: Optional[str] = Field(default=None, description="Auto-loaded from AZURE_OPENAI_CLIENT_ID")
+    client_secret: Optional[str] = Field(default=None, description="Auto-loaded from AZURE_OPENAI_CLIENT_SECRET") 
+    app_key: Optional[str] = Field(default=None, description="Auto-loaded from AZURE_OPENAI_APP_KEY")
+    tenant_id: str = Field("common", description="Azure tenant ID")
+    
+    # Alternative API key authentication
+    api_key: Optional[str] = Field(None, description="Direct API key (alternative to OAuth2)")
+    
+    def __init__(self, **data):
+        """Initialize LLMConfig with automatic environment variable loading."""
+        
+        # Auto-populate provider from environment if not provided
+        if 'provider' not in data or data['provider'] is None:
+            data['provider'] = os.getenv("LLM_PROVIDER", "azure_openai")
+            
+        # Auto-populate model from environment if not provided  
+        if 'model' not in data or data['model'] is None:
+            data['model'] = os.getenv("AZURE_OPENAI_MODEL", "gpt-4o-mini")
+            
+        # Auto-populate endpoint from environment if not provided
+        if 'endpoint' not in data or data['endpoint'] is None:
+            data['endpoint'] = os.getenv("LLM_ENDPOINT", "https://chat-ai.cisco.com")
+            
+        # Auto-populate deployment from model name if not provided
+        if 'deployment' not in data or data['deployment'] is None:
+            data['deployment'] = data.get('model', 'gpt-4o-mini')
+        
+        # Auto-populate OAuth2 credentials from environment if not provided
+        if 'client_id' not in data or data['client_id'] is None:
+            data['client_id'] = os.getenv("AZURE_OPENAI_CLIENT_ID")
+        
+        if 'client_secret' not in data or data['client_secret'] is None:
+            data['client_secret'] = os.getenv("AZURE_OPENAI_CLIENT_SECRET")
+            
+        if 'app_key' not in data or data['app_key'] is None:
+            data['app_key'] = os.getenv("AZURE_OPENAI_APP_KEY")
+        
+        super().__init__(**data)
+    
+    @model_validator(mode='after')
+    def validate_auth_config(self) -> 'LLMConfig':
+        """Validate authentication configuration after environment loading."""
+        if self.provider == "azure_openai":
+            if not self.api_key and (not self.client_id or not self.client_secret):
+                raise ValueError(
+                    "Azure OpenAI requires either api_key or OAuth2 credentials. "
+                    "Set AZURE_OPENAI_CLIENT_ID and AZURE_OPENAI_CLIENT_SECRET environment variables "
+                    "or provide api_key in configuration."
+                )
+        return self
+
+
+# ============================================================================
 # NODE CONFIGURATION SCHEMAS
 # ============================================================================
 
 class AgentNodeConfig(BaseModel):
-    """Configuration schema for AI agent nodes with multi-provider support."""
-
-    # Core configuration
-    provider: AIProvider = Field(..., description="AI provider (openai, anthropic, azure)")
-    model: str = Field(..., description="Model name (e.g., gpt-4, claude-3-sonnet)")
-    prompt: str = Field(..., description="Prompt template with variable substitution")
-
-    # Generation parameters
-    max_tokens: int = Field(1000, ge=1, le=100000, description="Maximum tokens to generate")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    """Simplified agent node configuration using unified LLMConfig."""
+    
+    llm_config: LLMConfig = Field(..., description="LLM configuration")
+    prompt: str = Field(..., description="User prompt with template support")
     system_prompt: Optional[str] = Field(None, description="System instructions")
-
-    # Azure-specific configuration
-    azure_endpoint: Optional[str] = Field(None, description="Azure OpenAI endpoint URL")
-    azure_deployment: Optional[str] = Field(None, description="Azure deployment name")
-    api_version: Optional[str] = Field(None, description="Azure API version")
-
-    # Execution configuration
-    timeout: int = Field(120, ge=1, le=3600, description="Request timeout in seconds")
-    retry_attempts: int = Field(3, ge=0, le=10, description="Number of retry attempts")
-
-    @model_validator(mode='after')
-    def validate_provider_config(self) -> 'AgentNodeConfig':
-        """Validate provider-specific configuration requirements."""
-        if self.provider == AIProvider.AZURE:
-            required_azure_fields = {
-                'azure_endpoint': self.azure_endpoint,
-                'azure_deployment': self.azure_deployment,
-                'api_version': self.api_version
-            }
-
-            missing_fields = [
-                field_name for field_name, field_value in required_azure_fields.items()
-                if not field_value
-            ]
-
-            if missing_fields:
-                raise ValueError(
-                    f"Azure provider requires the following fields: {', '.join(missing_fields)}"
-                )
-
-            # Validate Azure endpoint format
-            if self.azure_endpoint and not self.azure_endpoint.startswith(('http://', 'https://')):
-                raise ValueError("azure_endpoint must be a valid HTTP/HTTPS URL")
-
-        return self
+    
+    # Response configuration
+    response_format: Optional[Dict[str, Any]] = Field(None, description="JSON schema or output format")
+    
+    # Execution settings
+    timeout: int = Field(120, ge=30, le=1800, description="Execution timeout")
 
 
 class ToolNodeConfig(BaseModel):
@@ -112,46 +150,86 @@ class ToolNodeConfig(BaseModel):
 
 
 class MCPServerConfig(BaseModel):
-    """Configuration for MCP server connection."""
+    """Generic configuration for MCP server connection supporting all transport types."""
     
-    type: Literal["http", "stdio"] = Field("http", description="MCP server connection type")
-    url: Optional[str] = Field(None, description="HTTP server URL (for http type)")
+    # Core transport configuration
+    type: Literal["http", "stdio", "sse", "streamable-http"] = Field("http", description="MCP server transport type")
+    
+    # HTTP/SSE/Streamable-HTTP configuration
+    url: Optional[str] = Field(None, description="Server URL (for http/sse/streamable-http types)")
+    headers: Optional[Dict[str, str]] = Field(None, description="Custom HTTP headers")
+    
+    # Stdio configuration  
     command: Optional[str] = Field(None, description="Command to start stdio server")
     args: Optional[List[str]] = Field(None, description="Arguments for stdio server command")
-    timeout: int = Field(30, ge=1, le=300, description="Connection timeout in seconds")
+    
+    # Common configuration
+    timeout: int = Field(30, ge=1, le=600, description="Connection timeout in seconds")
+    retry_attempts: int = Field(3, ge=0, le=10, description="Max retry attempts")
+    
+    # Optional server identification
+    name: Optional[str] = Field(None, description="Human-readable server name")
+    description: Optional[str] = Field(None, description="Server description")
     
     @model_validator(mode='after')
     def validate_server_config(self) -> 'MCPServerConfig':
-        """Validate server configuration based on type."""
-        if self.type == "http":
+        """Validate server configuration based on transport type."""
+        if self.type in ["http", "sse", "streamable-http"]:
             if not self.url:
-                raise ValueError("HTTP MCP server requires 'url' field")
+                raise ValueError(f"{self.type} MCP server requires 'url' field")
             if not self.url.startswith(('http://', 'https://')):
                 raise ValueError("MCP server url must be a valid HTTP/HTTPS URL")
+                
+            # Set default headers for streamable-http and sse
+            if self.type in ["sse", "streamable-http"]:
+                if not self.headers:
+                    self.headers = {}
+                if "Accept" not in self.headers:
+                    self.headers["Accept"] = "application/json, text/event-stream"
+                    
         elif self.type == "stdio":
             if not self.command:
                 raise ValueError("stdio MCP server requires 'command' field")
+                
         return self
 
 
 class MCPToolNodeConfig(BaseModel):
-    """Configuration schema for MCP (Model Context Protocol) tool nodes."""
-
-    server: MCPServerConfig = Field(..., description="Embedded MCP server configuration")
-    tool_name: str = Field(..., description="Name of the tool to execute on MCP server")
-    tool_arguments: Dict[str, Any] = Field(default_factory=dict, description="Tool arguments with template support")
-    output_format: Optional[str] = Field("auto", description="Output format: 'auto', 'text', 'json', 'json_object'")
-    timeout: int = Field(300, ge=1, le=3600, description="Tool execution timeout in seconds")
-    retry_attempts: int = Field(3, ge=0, le=10, description="Number of retry attempts on failure")
-
-    @field_validator('tool_name')
-    @classmethod
-    def validate_tool_name(cls, v: str) -> str:
-        """Validate MCP tool name format."""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("tool_name cannot be empty")
-        # Allow more flexible tool names for MCP
-        return v.strip()
+    """MCP tool configuration supporting both smart and direct execution modes."""
+    
+    # MCP Server
+    server: MCPServerConfig = Field(..., description="MCP server configuration")
+    
+    # Execution mode
+    smart_mcp_enabled: bool = Field(True, description="Enable smart MCP mode")
+    
+    # Smart execution fields (required when smart_mcp_enabled=True)
+    llm_config: Optional[LLMConfig] = Field(None, description="LLM configuration for smart mode") 
+    user_prompt: Optional[str] = Field(None, description="Natural language task description for smart mode")
+    context_data: Dict[str, Any] = Field(default_factory=dict, description="Template variables")
+    
+    # Direct execution fields (required when smart_mcp_enabled=False)
+    tool_name: Optional[str] = Field(None, description="Specific tool name for direct mode")
+    tool_arguments: Dict[str, Any] = Field(default_factory=dict, description="Tool arguments for direct mode")
+    
+    # Common execution behavior
+    preferred_tools: Optional[List[str]] = Field(None, description="Tool selection hints")
+    max_tool_calls: int = Field(10, ge=1, le=20, description="Maximum tool calls per execution")
+    output_format: Literal["auto", "json", "text"] = Field("auto", description="Expected output format")
+    timeout: int = Field(300, ge=30, le=1800, description="Total execution timeout")
+    
+    @model_validator(mode='after')
+    def validate_mode_requirements(self) -> 'MCPToolNodeConfig':
+        """Validate configuration based on execution mode."""
+        if self.smart_mcp_enabled:
+            if not self.llm_config:
+                raise ValueError("smart_mcp_enabled=True requires llm_config")
+            if not self.user_prompt:
+                raise ValueError("smart_mcp_enabled=True requires user_prompt")
+        else:
+            if not self.tool_name:
+                raise ValueError("smart_mcp_enabled=False requires tool_name")
+        return self
 
 
 class ConditionRule(BaseModel):

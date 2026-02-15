@@ -75,6 +75,7 @@ class Node:
     config: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
     description: Optional[str] = None
+    alias: Optional[str] = None  # Human-readable alias for variable resolution
     trigger_rule: TriggerRule = TriggerRule.ALL_SUCCESS
     timeout_seconds: int = 300  # 5 minutes default
     retry_count: int = 0
@@ -114,10 +115,17 @@ class Node:
     
     def _validate_agent_config(self) -> None:
         """Validate agent node configuration."""
-        required_fields = ['provider', 'model', 'prompt']
+        required_fields = ['llm_config', 'prompt']
         for field in required_fields:
             if field not in self.config:
                 raise ValidationError(f"Agent node missing required config: {field}")
+        
+        # Validate llm_config structure
+        llm_config = self.config.get('llm_config', {})
+        if not isinstance(llm_config, dict):
+            raise ValidationError("Agent node llm_config must be a dictionary")
+        
+        # Basic validation - provider and model will be auto-populated from environment
     
     def _validate_tool_config(self) -> None:
         """Validate tool node configuration."""
@@ -126,10 +134,19 @@ class Node:
     
     def _validate_mcp_tool_config(self) -> None:
         """Validate MCP tool node configuration."""
-        required_fields = ['server_id', 'tool']
-        for field in required_fields:
-            if field not in self.config:
-                raise ValidationError(f"MCP tool node missing required config: {field}")
+        if 'server' not in self.config:
+            raise ValidationError("MCP tool node missing required config: server")
+        
+        # Basic server validation
+        server_config = self.config.get('server', {})
+        if not isinstance(server_config, dict):
+            raise ValidationError("MCP tool node server config must be a dictionary")
+        
+        # Check for required server fields
+        if 'type' not in server_config:
+            raise ValidationError("MCP tool node server missing required field: type")
+        if 'url' not in server_config and server_config.get('type') != 'stdio':
+            raise ValidationError("MCP tool node server missing required field: url")
     
     def _validate_condition_config(self) -> None:
         """Validate condition node configuration."""

@@ -165,6 +165,15 @@ class CiscoAPIClient:
     async def get_software_suggestions(self, product_id: str) -> Dict[str, Any]:
         """Get software suggestions for a Cisco product"""
         try:
+            # Ensure authentication is established
+            auth_result = await self.get_oauth_token()
+            if not auth_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Authentication failed: {auth_result.get('error', 'Unknown error')}",
+                    "product_id": product_id
+                }
+            
             endpoint = self.endpoints['suggestions'].format(product_id=product_id)
             result = await self._make_request('GET', endpoint)
             
@@ -191,6 +200,16 @@ class CiscoAPIClient:
     async def get_security_advisories(self, os_type: str, version: Optional[str] = None) -> Dict[str, Any]:
         """Get security advisories for OS type and version"""
         try:
+            # Ensure authentication is established
+            auth_result = await self.get_oauth_token()
+            if not auth_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Authentication failed: {auth_result.get('error', 'Unknown error')}",
+                    "os_type": os_type,
+                    "version": version
+                }
+            
             endpoint = self.endpoints['advisories'].format(os_type=os_type)
             params = {}
             if version:
@@ -220,64 +239,125 @@ class CiscoAPIClient:
                 "version": version
             }
     
-    async def get_bugs(self, product_id: str, software_version: str, status: str = "O", max_pages: int = 5) -> Dict[str, Any]:
-        """Get bugs for product and version"""
+    async def get_bugs(self, products: list, status: str = "O", max_pages: int = 5) -> Dict[str, Any]:
+        """Get bugs for one or more product/version pairs.
+        
+        Args:
+            products: List of dicts with 'product_id' and 'version' keys.
+                      Also accepts a JSON string (from template resolution).
+            status: Bug status filter (default 'O' for Open)
+            max_pages: Max pages to retrieve per product/version pair
+        """
         try:
-            all_bugs = []
-            page_index = 1
+            # Handle JSON string input (from template resolution)
+            if isinstance(products, str):
+                try:
+                    products = json.loads(products)
+                except (json.JSONDecodeError, TypeError):
+                    return {
+                        "success": False,
+                        "error": f"Invalid products format: expected JSON array, got string: {products[:200]}"
+                    }
             
-            endpoint = self.endpoints['bugs'].format(product_id=product_id, version=software_version)
-            
-            while page_index <= max_pages:
-                params = {
-                    'page_index': page_index,
-                    'status': status
+            if not isinstance(products, list) or len(products) == 0:
+                return {
+                    "success": False,
+                    "error": "products must be a non-empty array of {product_id, version} objects"
                 }
-                
-                result = await self._make_request('GET', endpoint, params=params)
-                
-                page_bugs = result.get('bugs', [])
-                if not page_bugs:
-                    break
-                
-                all_bugs.extend(page_bugs)
-                
-                # Check pagination
-                pagination = result.get('pagination', {})
-                total_pages = pagination.get('total_pages', 1)
-                
-                if page_index >= total_pages:
-                    break
-                
-                page_index += 1
             
-            # Transform the data
-            transformed = self._transform_bugs(all_bugs, product_id, software_version, status)
+            # Ensure authentication is established
+            auth_result = await self.get_oauth_token()
+            if not auth_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Authentication failed: {auth_result.get('error', 'Unknown error')}"
+                }
+            
+            results_by_product = []
+            
+            for item in products:
+                product_id = item.get('product_id', '')
+                version = item.get('version', '')
+                
+                if not product_id or not version:
+                    results_by_product.append({
+                        "product_id": product_id,
+                        "version": version,
+                        "error": "Missing product_id or version",
+                        "bugs": []
+                    })
+                    continue
+                
+                all_bugs = []
+                page_index = 1
+                
+                endpoint = self.endpoints['bugs'].format(product_id=product_id, version=version)
+                
+                try:
+                    while page_index <= max_pages:
+                        params = {
+                            'page_index': page_index,
+                            'status': status
+                        }
+                        
+                        result = await self._make_request('GET', endpoint, params=params)
+                        
+                        page_bugs = result.get('bugs', [])
+                        if not page_bugs:
+                            break
+                        
+                        all_bugs.extend(page_bugs)
+                        
+                        # Check pagination
+                        pagination = result.get('pagination', {})
+                        total_pages = pagination.get('total_pages', 1)
+                        
+                        if page_index >= total_pages:
+                            break
+                        
+                        page_index += 1
+                    
+                    transformed = self._transform_bugs(all_bugs, product_id, version, status)
+                    results_by_product.append(transformed)
+                    
+                except Exception as e:
+                    logger.error(f"Failed to get bugs for {product_id} v{version}: {e}")
+                    results_by_product.append({
+                        "product_id": product_id,
+                        "version": version,
+                        "error": str(e),
+                        "bugs": []
+                    })
             
             return {
                 "success": True,
-                "data": transformed,
+                "data": results_by_product,
                 "metadata": {
-                    "product_id": product_id,
-                    "software_version": software_version,
+                    "total_products_queried": len(products),
                     "status_filter": status,
-                    "pages_retrieved": page_index - 1,
                     "retrieved_at": datetime.now(timezone.utc).isoformat()
                 }
             }
             
         except Exception as e:
-            logger.error(f"Failed to get bugs for {product_id}: {e}")
+            logger.error(f"Failed to get bugs: {e}")
             return {
                 "success": False,
-                "error": str(e),
-                "product_id": product_id,
-                "software_version": software_version
+                "error": str(e)
             }
     
     async def get_advisory_details(self, advisory_id: str) -> Dict[str, Any]:
         """Get detailed advisory information"""
         try:
+            # Ensure authentication is established
+            auth_result = await self.get_oauth_token()
+            if not auth_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Authentication failed: {auth_result.get('error', 'Unknown error')}",
+                    "advisory_id": advisory_id
+                }
+            
             endpoint = self.endpoints['advisory_by_id'].format(advisory_id=advisory_id)
             result = await self._make_request('GET', endpoint)
             
@@ -311,10 +391,12 @@ class CiscoAPIClient:
         
         product_data = product_list[0]
         product_info = product_data.get('product', {})
+        resolved_product_id = product_info.get('basePID') or product_id
         suggestions = []
         
         for suggestion in product_data.get('suggestions', []):
             suggestions.append({
+                "product_id": resolved_product_id,
                 "version": suggestion.get('releaseFormat1') or suggestion.get('releaseFormat2'),
                 "release_date": suggestion.get('releaseDate'),
                 "lifecycle": suggestion.get('releaseLifeCycle'),
@@ -323,7 +405,7 @@ class CiscoAPIClient:
             })
         
         return {
-            "product_id": product_info.get('basePID') or product_id,
+            "product_id": resolved_product_id,
             "product_name": product_info.get('productName'),
             "suggestions": suggestions
         }
@@ -365,7 +447,7 @@ class CiscoAPIClient:
         
         return {
             "product_id": product_id,
-            "software_version": version,
+            "version": version,
             "bugs": bugs
         }
 
@@ -450,16 +532,26 @@ def get_available_tools() -> List[Dict[str, Any]]:
         },
         {
             "name": "get_bugs",
-            "description": "Get known bugs for products",
+            "description": "Get known bugs for one or more product/version pairs",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "product_id": {"type": "string", "description": "Product ID"},
-                    "software_version": {"type": "string", "description": "Software version"},
-                    "status": {"type": "string", "description": "Bug status", "default": "O"},
-                    "max_pages": {"type": "integer", "description": "Max pages", "default": 5}
+                    "products": {
+                        "type": "array",
+                        "description": "Array of product/version pairs to query bugs for",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "product_id": {"type": "string", "description": "Product ID (e.g., 'ASR1001-X')"},
+                                "version": {"type": "string", "description": "Software version (e.g., '16.12.14')"}
+                            },
+                            "required": ["product_id", "version"]
+                        }
+                    },
+                    "status": {"type": "string", "description": "Bug status filter (default 'O' for Open)", "default": "O"},
+                    "max_pages": {"type": "integer", "description": "Max pages per product/version pair", "default": 5}
                 },
-                "required": ["product_id", "software_version"]
+                "required": ["products"]
             }
         },
         {
@@ -490,8 +582,7 @@ async def call_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]
         )
     elif tool_name == "get_bugs":
         return await cisco_client.get_bugs(
-            arguments["product_id"],
-            arguments["software_version"], 
+            arguments["products"],
             arguments.get("status", "O"),
             arguments.get("max_pages", 5)
         )
@@ -503,6 +594,7 @@ async def call_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]
 # ===== MCP ENDPOINTS =====
 
 @app.post("/mcp")
+@app.post("/mcp/")
 async def mcp_endpoint(request: MCPRequest):
     """Main MCP protocol endpoint"""
     try:

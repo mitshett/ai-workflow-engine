@@ -71,7 +71,7 @@ class WorkflowExecutionRequest(BaseModel):
                     "type": "agent",
                     "config": {
                         "provider": "azure_openai",
-                        "model": "gpt-35-turbo",
+                        "model": "gpt-4o-mini",
                         "prompt": "Provide weather info for Bengaluru, India"
                     },
                     "next": ["workflow_end"]
@@ -487,16 +487,9 @@ def _extract_simple_response(node_type: str, data: dict) -> str:
     elif node_type == "agent":
         # For agent nodes, extract the AI response
         if 'response' in data:
-            response = data['response']
-            # Truncate long responses for the simple text field
-            if len(response) > 200:
-                return response[:200] + "..."
-            return response
+            return data['response']
         elif 'full' in data and isinstance(data['full'], dict):
-            response = data['full'].get('response', '')
-            if len(response) > 200:
-                return response[:200] + "..."
-            return response
+            return data['full'].get('response', '')
         return "AI agent executed successfully"
     
     elif node_type == "mcp_tool":

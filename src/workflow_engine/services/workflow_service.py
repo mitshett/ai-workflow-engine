@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
+from ..shared.utils.logging import get_logger
+
 from ..domain.models import (
     Workflow,
     Node,
@@ -28,6 +30,8 @@ from ..domain.exceptions.base import (
     BusinessLogicException,
     ResourceNotFoundException,
 )
+
+logger = get_logger(__name__)
 
 
 class WorkflowService:
@@ -306,9 +310,15 @@ class WorkflowService:
             # 2. Validate input data against workflow schema
             await self._validate_input_data(workflow, input_data)
             
-            # 3. Create execution context
+            # 3. Create execution context with alias mapping
+            alias_to_node_mapping = {}
+            for node in workflow.nodes:
+                if hasattr(node, 'alias') and node.alias:
+                    alias_to_node_mapping[node.alias] = node.id
+            
             context = create_execution_context(
-                run_id=run_id
+                run_id=run_id,
+                alias_to_node_mapping=alias_to_node_mapping
             )
             
             # 4. Create execution result
@@ -447,14 +457,26 @@ class WorkflowService:
             # 2. Validate input data
             await self._validate_input_data(workflow, input_data)
             
-            # 3. Create execution context
+            # 3. Create execution context with alias mapping
+            alias_to_node_mapping = {}
+            for node in workflow.nodes:
+                if hasattr(node, 'alias') and node.alias:
+                    alias_to_node_mapping[node.alias] = node.id
+            
             context = create_execution_context(
-                run_id=run_id
+                run_id=run_id,
+                alias_to_node_mapping=alias_to_node_mapping
             )
             
-            # Set workflow input data in context
+            # Set workflow input data in context for domain layer
             context.input_data = input_data
             context.workflow_id = workflow.id
+            
+            # CRITICAL FIX: Also set workflow input in variables for template resolution
+            # This ensures ${workflow.input.X} templates work correctly
+            if input_data:
+                for key, value in input_data.items():
+                    context.set_variable(f"workflow.input.{key}", value)
             
             # 4. Create execution result
             execution_result = create_execution_result(

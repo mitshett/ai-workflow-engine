@@ -288,6 +288,13 @@ def register_routes(app: FastAPI) -> None:
         logger.info("Execution API routes registered successfully")
     except ImportError as e:
         logger.warning(f"Could not import execution router: {e}")
+    
+    try:
+        from ..api.v1.mcp import router as mcp_router
+        app.include_router(mcp_router, prefix="")  # Router already has prefix
+        logger.info("MCP discovery API routes registered successfully")
+    except ImportError as e:
+        logger.warning(f"Could not import MCP router: {e}")
 
 
 # Create the application instance

@@ -397,19 +397,25 @@ class ResponseService:
         if not isinstance(data, dict):
             return {}
         
-        # Check for structured result
+        # Priority 1: Check for parsed JSON data (contains actual MCP response data)
+        if 'parsed' in data:
+            parsed = data['parsed']
+            if isinstance(parsed, dict):
+                return parsed
+        
+        # Priority 2: Check for structured result
         if 'result' in data:
             result = data['result']
             if isinstance(result, dict):
                 return result
         
-        # Check for structured content
+        # Priority 3: Check for structured content
         if 'content' in data:
             content = data['content']
             if isinstance(content, dict):
                 return content
         
-        # If output is structured, return it
+        # Priority 4: If output is structured, return it
         if isinstance(output, dict):
             return output
         
@@ -497,21 +503,21 @@ class ResponseService:
         return node_result.node_id
     
     @staticmethod
-    def _truncate_response(response: str, max_length: int = 200) -> str:
+    def _truncate_response(response: str, max_length: int = 0) -> str:
         """
-        Truncate response text to reasonable length for simple response field.
+        Optionally truncate response text if max_length is set.
         
         Args:
             response: Response text to truncate
-            max_length: Maximum length before truncation
+            max_length: Maximum length before truncation (0 = no limit)
             
         Returns:
-            Truncated response text with ellipsis if needed
+            Response text, truncated with ellipsis only if max_length > 0
         """
         if not isinstance(response, str):
             response = str(response)
         
-        if len(response) <= max_length:
+        if max_length <= 0 or len(response) <= max_length:
             return response
         
         return response[:max_length] + "..."

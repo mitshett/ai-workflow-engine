@@ -576,7 +576,8 @@ class ConditionExecutor(NodeExecutor):
                     for r in evaluation_results
                 ],
                 "rules_evaluated": len(evaluation_results),
-                "used_default": matched_target == default_target
+                "used_default": matched_target == default_target,
+                "node_name": node.name or node.config.get('name', node.id)  # Include node display name
             }
 
             # Context updates

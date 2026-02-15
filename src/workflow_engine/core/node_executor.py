@@ -454,12 +454,14 @@ class NodeExecutor(ABC):
 
         try:
             # 1. Validate configuration
+            logger.debug(f"Validating config for node {node.id} ({node.type}): {node.config}")
             validation_result = self.validate_config(node.config)
             if not validation_result.is_valid:
+                logger.error(f"Validation failed for node {node.id}: {[issue.to_dict() for issue in validation_result.errors]}")
                 result.status = ExecutionStatus.FAILED
                 result.error = {
-                    "type": "ValidationError",
-                    "message": "Node configuration validation failed",
+                    "type": "ValidationError", 
+                    "message": f"Node configuration validation failed: {'; '.join([issue.message for issue in validation_result.errors])}",
                     "validation_issues": [issue.to_dict() for issue in validation_result.errors]
                 }
                 result.can_retry = False

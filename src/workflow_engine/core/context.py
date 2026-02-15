@@ -16,6 +16,7 @@ Author: AI Workflow Engine Team
 """
 
 import asyncio
+import json
 import time
 import hashlib
 from typing import Dict, Any, Optional, List, Set
@@ -242,6 +243,22 @@ class ExecutionContext:
                 execution_time_ms=execution_time,
                 found=value != default if 'value' in locals() else False
             )
+    
+    def get_sync(self, key: str, default: Any = None) -> Any:
+        """
+        Synchronous context retrieval for template resolution.
+        
+        WARNING: This is not thread-safe and should only be used in template
+        resolution where async context is not available.
+        
+        Args:
+            key: Dot-notation key (e.g., 'nodes.analyze.output.summary')
+            default: Default value if key not found
+        Returns:
+            Value at key or default
+        """
+        # Get value from namespace directly (not thread-safe)
+        return self._namespace.get(key, default)
 
     async def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
         """
@@ -398,16 +415,53 @@ class ExecutionContext:
             elif var_path.startswith("workflow."):
                 # Check if this is an alias reference first
                 key_parts = var_path[9:].split('.')  # Remove 'workflow.' prefix  
-                if len(key_parts) >= 2 and key_parts[0] in self._alias_to_node_mapping:
-                    # Translate alias to node ID: workflow.alias.field -> nodes.node_id.output.field
+                
+                logger.debug(
+                    "Processing workflow variable",
+                    run_id=self.run_id,
+                    var_path=var_path,
+                    key_parts=key_parts,
+                    available_aliases=list(self._alias_to_node_mapping.keys())
+                )
+                
+                if key_parts[0] in self._alias_to_node_mapping:
+                    # Translate alias to node ID
                     alias = key_parts[0]
                     node_id = self._alias_to_node_mapping[alias]
-                    # Reconstruct as nodes.{node_id}.output.{remaining_path}
-                    node_key = f"nodes.{node_id}.output." + ".".join(key_parts[1:])
+                    
+                    if len(key_parts) >= 2:
+                        # workflow.alias.field -> nodes.node_id.output.field
+                        node_key = f"nodes.{node_id}.output." + ".".join(key_parts[1:])
+                    else:
+                        # workflow.alias (bare alias, no sub-field) -> nodes.node_id.output
+                        node_key = f"nodes.{node_id}.output"
+                    
                     value = await self.get(node_key)
+                    
+                    # If value is a complex type (dict/list), serialize to JSON string
+                    # so it can be embedded in prompt templates
+                    if isinstance(value, (dict, list)):
+                        value = json.dumps(value, indent=2, default=str)
+                    
+                    logger.debug(
+                        "Resolved workflow alias variable",
+                        run_id=self.run_id,
+                        original_var=var_path,
+                        alias=alias,
+                        node_id=node_id,
+                        translated_key=node_key,
+                        resolved_value=str(value)[:200] if value else None
+                    )
                 else:
                     # Regular workflow variable - keep full path including 'workflow.'
                     value = await self.get(var_path)
+                    
+                    logger.debug(
+                        "Resolved regular workflow variable",
+                        run_id=self.run_id,
+                        var_path=var_path,
+                        resolved_value=value
+                    )
                     
                 return str(value) if value is not None else ""
             else:

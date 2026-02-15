@@ -326,6 +326,7 @@ class ValidationService:
             type=node_type,
             name=node_data.get('name'),
             description=node_data.get('description'),
+            alias=node_data.get('alias'),
             config=config,
             trigger_rule=trigger_rule,
             timeout_seconds=node_data.get('timeout_seconds', 300),
@@ -662,12 +663,11 @@ class ValidationService:
                 # END nodes typically don't need configuration
             },
             NodeType.AGENT: {
-                'provider': {'type': 'string', 'required': True},
-                'model': {'type': 'string', 'required': True},
+                'llm_config': {'type': 'object', 'required': True},
                 'prompt': {'type': 'string', 'required': True},
-                'max_tokens': {'type': 'integer', 'required': False},
-                'temperature': {'type': 'number', 'required': False},
-                'system_prompt': {'type': 'string', 'required': False}
+                'system_prompt': {'type': 'string', 'required': False},
+                'response_format': {'type': 'object', 'required': False},
+                'timeout': {'type': 'integer', 'required': False}
             },
             NodeType.TOOL: {
                 'tool': {'type': 'string', 'required': True},
@@ -675,10 +675,8 @@ class ValidationService:
                 'timeout': {'type': 'integer', 'required': False}
             },
             NodeType.MCP_TOOL: {
-                'server_id': {'type': 'string', 'required': True},
-                'tool': {'type': 'string', 'required': True},
-                'arguments': {'type': 'object', 'required': False},
-                'timeout': {'type': 'integer', 'required': False}
+                # MCP tool validation is handled by Pydantic schemas in core/schemas.py
+                # This empty schema allows the node type to pass through validation
             },
             NodeType.CONDITION: {
                 'expression': {'type': 'string', 'required': True},
