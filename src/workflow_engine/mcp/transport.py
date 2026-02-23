@@ -350,7 +350,11 @@ class StreamableHTTPTransport(MCPTransport):
             'params': params
         }
         
-        endpoint = f"{self.base_url}/mcp/"  # Note: trailing slash required
+        # Append /mcp/ only if the base URL doesn't already end with /mcp
+        if self.base_url.rstrip('/').endswith('/mcp'):
+            endpoint = f"{self.base_url.rstrip('/')}/"
+        else:
+            endpoint = f"{self.base_url}/mcp/"
         headers = {}
         
         # Add session ID to headers if available
@@ -401,7 +405,11 @@ class StreamableHTTPTransport(MCPTransport):
             'params': params
         }
         
-        endpoint = f"{self.base_url}/mcp/"
+        # Append /mcp/ only if the base URL doesn't already end with /mcp
+        if self.base_url.rstrip('/').endswith('/mcp'):
+            endpoint = f"{self.base_url.rstrip('/')}/"
+        else:
+            endpoint = f"{self.base_url}/mcp/"
         headers = {}
         
         if self.session_id:

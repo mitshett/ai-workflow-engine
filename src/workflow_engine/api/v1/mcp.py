@@ -8,7 +8,7 @@ Author: AI Workflow Engine Team
 """
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 import logging
 
@@ -48,6 +48,11 @@ class MCPDiscoverRequest(BaseModel):
     server_type: str = Field("streamable-http", description="Transport type: http, streamable-http, sse, stdio")
     headers: Optional[Dict[str, str]] = Field(None, description="Optional HTTP headers")
     timeout: int = Field(30, ge=1, le=120, description="Connection timeout in seconds")
+
+    @field_validator('server_url', mode='before')
+    @classmethod
+    def strip_url(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else v
 
 
 class MCPToolSchema(BaseModel):

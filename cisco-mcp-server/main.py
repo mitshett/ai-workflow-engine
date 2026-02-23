@@ -265,6 +265,13 @@ class CiscoAPIClient:
                     "error": "products must be a non-empty array of {product_id, version} objects"
                 }
             
+            # Coerce argument types (MCP JSON may deliver these as strings)
+            try:
+                max_pages = int(max_pages)
+            except (TypeError, ValueError):
+                max_pages = 5
+            status = str(status) if status else "O"
+            
             # Ensure authentication is established
             auth_result = await self.get_oauth_token()
             if not auth_result.get("success"):
