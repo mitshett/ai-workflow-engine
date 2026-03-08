@@ -14,6 +14,8 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
+from openai import AuthenticationError as OpenAIAuthError
+
 from ..core.node_executor import (
     NodeExecutor,
     ExecutionResult,
@@ -56,6 +58,19 @@ class AgentExecutor(NodeExecutor):
 
     def __init__(self):
         super().__init__(default_timeout=120)
+
+    @staticmethod
+    def _is_auth_error(error: Exception) -> bool:
+        """Check if an exception is an authentication/token expiry error."""
+        err_str = str(error)
+        err_lower = err_str.lower()
+        return (
+            isinstance(error, OpenAIAuthError)
+            or isinstance(error.__cause__, OpenAIAuthError)
+            or "401" in err_str
+            or ("token" in err_lower and "expired" in err_lower)
+            or "unauthorized" in err_lower
+        )
 
     async def execute_impl(self, node: WorkflowNode, context: ExecutionContext) -> ExecutionResult:
         """Execute AI agent node using unified LangChain infrastructure."""
@@ -132,10 +147,26 @@ class AgentExecutor(NodeExecutor):
             # Create LangChain client using shared infrastructure
             llm_client = await LLMClientFactory.create_langchain_client(config.llm_config)
 
-            # Execute using LangChain
-            response = await self._execute_with_langchain(
-                llm_client, resolved_prompt, resolved_system_prompt, config
-            )
+            # Execute using LangChain — with retry on auth failure
+            try:
+                response = await self._execute_with_langchain(
+                    llm_client, resolved_prompt, resolved_system_prompt, config
+                )
+            except RuntimeError as exec_err:
+                if self._is_auth_error(exec_err):
+                    logger.warning(
+                        "Authentication error detected, refreshing token and retrying once",
+                        node_id=node.id,
+                        error=str(exec_err)
+                    )
+                    # Invalidate cached token + client, then retry with fresh credentials
+                    LLMClientFactory.invalidate_cache(config.llm_config)
+                    llm_client = await LLMClientFactory.create_langchain_client(config.llm_config)
+                    response = await self._execute_with_langchain(
+                        llm_client, resolved_prompt, resolved_system_prompt, config
+                    )
+                else:
+                    raise
 
             # Process response based on output format
             processed_response, context_updates = await self._process_response(
@@ -393,7 +424,7 @@ class AgentExecutor(NodeExecutor):
                 model=config.llm_config.model,
                 error=str(e)
             )
-            raise RuntimeError(f"LangChain execution failed: {str(e)}")
+            raise RuntimeError(f"LangChain execution failed: {str(e)}") from e
 
     def validate_config(self, config: Dict[str, Any]) -> ValidationResult:
         """Validate agent node configuration using unified LLMConfig."""

@@ -16,6 +16,8 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
+from openai import AuthenticationError as OpenAIAuthError
+
 
 from ..core.node_executor import (
     NodeExecutor,
@@ -198,9 +200,37 @@ class MCPToolExecutor(NodeExecutor):
                     }
                 )
             except Exception as invoke_error:
+                # Check for auth/token expiry errors first — retry once with fresh token
+                err_str = str(invoke_error)
+                err_lower = err_str.lower()
+                is_auth_error = (
+                    isinstance(invoke_error, OpenAIAuthError)
+                    or "401" in err_str
+                    or ("token" in err_lower and "expired" in err_lower)
+                    or "unauthorized" in err_lower
+                )
+
+                if is_auth_error:
+                    logger.warning(
+                        "Authentication error in MCP agent, refreshing token and retrying once",
+                        node_id=node.id,
+                        error=err_str
+                    )
+                    # Invalidate cached token + client, rebuild agent with fresh credentials
+                    LLMClientFactory.invalidate_cache(config.llm_config)
+                    llm_client = await LLMClientFactory.create_langchain_client(config.llm_config)
+                    agent = await self._build_smart_agent(llm_client, tools, config)
+                    agent_response = await agent.ainvoke(
+                        {"messages": [HumanMessage(content=user_message)]},
+                        config={
+                            "recursion_limit": config.max_tool_calls * 2,
+                            "configurable": {
+                                "thread_id": f"mcp-{node.id}-{context.run_id}-retry"
+                            }
+                        }
+                    )
                 # Handle specific LangChain MCP async issues
-                logger.error(f"Agent invocation failed: {str(invoke_error)}")
-                if "StructuredTool" in str(invoke_error) or "sync" in str(invoke_error).lower():
+                elif "StructuredTool" in err_str or "sync" in err_lower:
                     logger.warning("Detected sync/async tool issue, retrying with different configuration")
                     # Retry without complex configuration
                     agent_response = await agent.ainvoke(

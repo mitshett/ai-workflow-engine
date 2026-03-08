@@ -1,5 +1,87 @@
 services:
+  # =============================================================================
+  # AI Workflow Engine (Backend API)
+  # =============================================================================
+  workflow-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-workflow-engine
+    restart: unless-stopped
+    environment:
+      APP_ENVIRONMENT: development
+      APP_DEBUG: "true"
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./src:/app/src:ro
+      - ./.env:/app/.env:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - workflow-network
+
+  # =============================================================================
+  # Cisco MCP Server (Cisco API Tools)
+  # =============================================================================
+  cisco-mcp-server:
+    build:
+      context: ./cisco-mcp-server
+      dockerfile: Dockerfile
+    container_name: cisco-mcp-server
+    restart: unless-stopped
+    env_file:
+      - ./cisco-mcp-server/.env
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - workflow-network
+
+  # =============================================================================
+  # Jira MCP Server (Jira/Atlassian Tools)
+  # =============================================================================
+  jira-mcp-server:
+    image: ghcr.io/sooperset/mcp-atlassian:latest
+    container_name: jira-mcp-server
+    restart: unless-stopped
+    environment:
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_USERNAME=${JIRA_USERNAME}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - MCP_TRANSPORT=streamable-http
+      - MCP_PORT=9080
+    command: ["--transport", "streamable-http", "--port", "9080", "--path", "/mcp"]
+    ports:
+      - "8182:9080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9080/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - workflow-network
+
+  # =============================================================================
   # PostgreSQL Database
+  # =============================================================================
   postgres:
     image: postgres:15-alpine
     container_name: ai-workflow-postgres
@@ -23,7 +105,10 @@ services:
     networks:
       - workflow-network
 
-  # Optional: pgAdmin for database management
+  # =============================================================================
+  # pgAdmin (Database Management UI) — optional
+  # Start with: docker compose --profile admin up
+  # =============================================================================
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: ai-workflow-pgadmin
@@ -42,9 +127,12 @@ services:
     networks:
       - workflow-network
     profiles:
-      - admin  # Use with: docker-compose --profile admin up
+      - admin
 
-  # Redis (for future caching/queuing needs)
+  # =============================================================================
+  # Redis (Cache/Queue) — optional
+  # Start with: docker compose --profile cache up
+  # =============================================================================
   redis:
     image: redis:7-alpine
     container_name: ai-workflow-redis
@@ -61,7 +149,7 @@ services:
     networks:
       - workflow-network
     profiles:
-      - cache  # Use with: docker-compose --profile cache up
+      - cache
 
 volumes:
   postgres_data:
